@@ -8,11 +8,35 @@ a log of successes would be worthless for that purpose.
 Format: what broke · why it broke · what it changed · whether it is worth saying
 out loud to a room.
 
-**Standing instruction for `docs/slides.md`:** act three opens on entry 5 — *"every
-step of my isolation was sound and the conclusion was still wrong, because I
-never suspected the instrument"* — not on a trade-off table. The trade-offs come
-after. The wrong task I wrote up in earnest stays in the record: the reversal is
-the point, and deleting the wrong turn would delete the evidence that it was one.
+**Standing instruction for `docs/slides.md`.** Act three is built on entries **5
+and 10 together**, not on either alone, and not on a trade-off table. The
+trade-offs come after.
+
+The theme is: **verification tooling needs verifying.** The two entries are the
+same lesson arriving from opposite directions, which is why both are needed and
+why neither is sufficient:
+
+- **Entry 5 — the instrument was wrong, and every step of my isolation was
+  sound.** Five raster scales, three payloads, clean neighbours: a textbook
+  bisection, and the conclusion was still false, because the one thing I never
+  put on trial was the decoder I was measuring with.
+- **Entry 10 — the guard was dead, and every run said PASS.** The architecture
+  test's logic was correct the whole time. Its *cache key* was wrong, so it
+  replayed a stale green tick over a live violation. Nothing was measured; the
+  answer was served from memory.
+
+One is "I trusted the measurement". The other is "there was no measurement". A
+green check mark is a claim made by an entire pipeline — the assertion, the
+instrument, and the reporting layer between them — and in this build each of
+those three failed at least once.
+
+Learning it twice in a single project is the point, not an embarrassment to
+compress. Two independent instances is the difference between an anecdote and a
+pattern, and the honest question it leaves behind is the one to put to the room:
+*have you ever watched your CI fail on purpose, in the exact way you invoke it?*
+
+The wrong task I wrote up in earnest stays in the record. The reversal is the
+evidence; deleting the wrong turn would delete the proof that it was one.
 
 ---
 
