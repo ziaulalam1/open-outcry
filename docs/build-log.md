@@ -8,6 +8,12 @@ a log of successes would be worthless for that purpose.
 Format: what broke · why it broke · what it changed · whether it is worth saying
 out loud to a room.
 
+**Standing instruction for `docs/slides.md`:** act three opens on entry 5 — *"every
+step of my isolation was sound and the conclusion was still wrong, because I
+never suspected the instrument"* — not on a trade-off table. The trade-offs come
+after. The wrong task I wrote up in earnest stays in the record: the reversal is
+the point, and deleting the wrong turn would delete the evidence that it was one.
+
 ---
 
 ## 1. The ladder rode up over the pane header, and clipped the best bid
