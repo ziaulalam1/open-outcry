@@ -220,6 +220,35 @@ unfalsifiable* would not have been. Whatever you hand work to — a colleague, a
 reviewer, a tool — has to be able to tell you your premise is wrong, and you
 have to have asked in a way that lets it.
 
+### Upstream status (checked 2026-08-23)
+
+Filing an issue would be shouting into a void. Evidence, from the npm registry
+and GitHub APIs rather than from a search engine:
+
+| Signal | Value |
+|---|---|
+| Latest release | 1.4.0, **2021-04-24** (5 years old) |
+| Last commit on `master` | **2021-08-24** |
+| Open pull requests | 18 — oldest 2021-06, newest 2024-08, none merged |
+| Open issues | 97 |
+| Maintainer comments in the last 30 issue comments (2022-12 → 2025-07) | **0** |
+| Repo archived? | No — so it *looks* maintained to anyone glancing at it |
+
+The repository is not archived, which is the trap: nothing on the page says
+"unmaintained", so the defect stays discoverable-but-unfixed and every new user
+inherits it. The npm `modified` timestamp is recent for registry-metadata
+reasons and says nothing about the code.
+
+Conclusion: **dormant**. An issue is not worth writing; a public writeup is. The
+derivation above is deliberately self-contained so it can be lifted into one
+without rework — the spec construction, the two worked versions, the
+non-uniform-interior tell, and three independent confirmations.
+
+Note for anyone else hitting this: jsQR misreads only version 23 symbols, and
+only at ECC level L, where there is not enough redundancy to absorb the
+mis-sampling. At M, Q and H the same symbol decodes fine, which is why this can
+sit undetected — most real payloads are far below version 23 anyway.
+
 ---
 
 ## 6. The auto-fit cached an answer for a pane that then got smaller
