@@ -282,3 +282,65 @@ becomes stable.
 **Worth saying out loud:** probably not on stage — it is tooling trivia, not a
 design lesson. Recorded because it cost real time and will recur the next time
 anyone automates a shot of this page.
+
+---
+
+## 9. A guard that searched for a string the output can never contain
+
+*2026-08-23*
+
+**Broke:** The determinism test failed with "script does not exercise the
+matcher", on a script that plainly does.
+
+**Why:** The guard was `strings.Contains(stream, "Traded")`, over a stream built
+with `fmt.Sprintf("%+v", events)`. `%+v` on a slice of interface values prints
+each element's *fields* — `{Price:10250 Qty:100 ...}` — and never its type name.
+The substring could not appear no matter what the engine did.
+
+**Fixed by:** counting trades from the events directly instead of grepping a
+rendered string.
+
+**Worth saying out loud:** as a footnote to #4, yes. This one failed closed and
+cost a minute. The same mistake in a guard phrased the other way round — assert
+something absent rather than something present — passes silently forever. The
+difference between the two is luck, not skill, which is the argument for
+asserting on values rather than on their formatting.
+
+---
+
+## 10. The architecture test reported `ok (cached)` while the architecture was violated
+
+*2026-08-23*
+
+**Broke:** `internal/arch` is the file that turns "the engine knows nothing about
+transport" from a comment into a build failure. To prove it actually fires, I
+planted `import "encoding/json"` and `import "time"` in the engine and ran it.
+It printed `ok (cached)`.
+
+**Why:** The test reaches its conclusions by shelling out to `go list`. Go's test
+cache keys on the files the test binary *opens*, recorded via testlog — and this
+test opens none of the files it audits. So cmd/go correctly concluded nothing
+had changed, and replayed a stale PASS. Run with `-count=1` the same violation
+produced four detailed failures, so the logic was right the whole time; only its
+cache key was wrong.
+
+**Fixed by:** making the cache key correct rather than defeating the cache. The
+test now reads every `.go` file in the module before asserting anything, so any
+source change invalidates it. Verified end to end: warm the cache to a PASS,
+plant the violation, run with no flags — four violations, `FAIL`.
+
+**Worth saying out loud: yes, and it belongs next to #5.** It is the same lesson
+arriving from a third direction, and by now that is the pattern rather than the
+anecdote:
+
+- In #4 the test measured at a moment when the property was unobservable.
+- In #5 I trusted the instrument and blamed the code.
+- Here the test was correct, the code was correctly broken, and the *reporting
+  layer between them* served a stale answer.
+
+Three different components in the chain from "is it true?" to "does it say so?",
+each of which failed once. A green check mark is a claim made by a whole
+pipeline, not by the assertion at the end of it. The thing worth asking of any
+guard you rely on is not "does it pass?" but "have I ever seen it fail, on
+purpose, in the exact way I would invoke it?" — and for this one the honest
+answer was no until I checked.
