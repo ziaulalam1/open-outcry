@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Open Outcry</title>
+<link rel="stylesheet" href="/projector.css">
+<link rel="stylesheet" href="/trader.css">
+</head>
+<body>
+<!--
+  One document, both views. `?view=` switches client-side; the server serves this
+  file for every route and never renders anything. There is no build step, no
+  bundler, and no framework: everything below is ES modules the browser runs as-is.
+-->
+<div id="root"></div>
+<script type="module" src="/app.js"></script>
+</body>
+</html>

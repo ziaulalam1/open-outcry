@@ -1,0 +1,13 @@
+/* trader.css — phone-first. Large touch targets, no hover-dependent affordances,
+ * readable on a bad connection and a cracked screen. Built at checkpoint 3. */
+
+.trader-stub {
+  min-height: 100vh;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px; text-align: center; padding: 24px;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: #e9eef5; background: #05060a;
+}
+.trader-stub h1 { margin: 0; letter-spacing: .18em; font-size: 26px; }
+.trader-stub p { margin: 0; font-size: 16px; }
+.trader-stub .dim { color: #74849a; font-size: 14px; }

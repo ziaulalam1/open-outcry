@@ -1,0 +1,284 @@
+# Build log — things that broke, and what they taught
+
+Kept as they happened, not reconstructed afterwards. Act three of the talk has a
+beat called *"here's what I got wrong the first time"*; this file is where that
+beat gets its material. Entries are only added when something actually failed —
+a log of successes would be worthless for that purpose.
+
+Format: what broke · why it broke · what it changed · whether it is worth saying
+out loud to a room.
+
+---
+
+## 1. The ladder rode up over the pane header, and clipped the best bid
+
+*2026-08-23*
+
+**Broke:** The first projector render put the top ask row underneath the pane's
+own header. The collision landed on the best ask — the single number the room
+actually watches.
+
+**Why:** The ladder was a centred flex column with `flex: 1` and no
+`overflow: hidden`, and I had hardcoded seven price levels per side. Seven asks
+plus a spread row plus seven bids at that type size is taller than the box on a
+1920×1080 screen. Overflowing flex content does not clip by default; it just
+draws outside its parent.
+
+**Fixed by:** `overflow: hidden` on the ladder — but that only converts an
+overlap into a silent clip, which is not better. The real fix was to stop
+hardcoding depth: the view now measures `scrollHeight - clientHeight` and drops
+a level until the ladder fits, bounded between 7 and 3, re-fitted only when the
+layout signature (viewport, hero mode, split) changes.
+
+**Worth saying out loud:** yes, and it generalises. I do not know what
+resolution the projector in the room will be. A hardcoded seven that happens to
+fit my laptop is a demo that breaks on someone else's hardware, in front of
+people. Measuring is three lines longer and cannot be wrong.
+
+---
+
+## 2. Hero mode reintroduced the same bug the same day
+
+*2026-08-23*
+
+**Broke:** After fixing #1 for the normal view, `&hero=true` overflowed by 130px.
+
+**Why:** Hero mode scales all type by 1.3 via a CSS variable. I fixed the depth
+for one scale factor and assumed it held for the other. It is the identical bug,
+found again ninety seconds later, because the first fix treated a symptom
+(*six levels fits*) rather than the cause (*depth must be derived, not chosen*).
+
+**Fixed by:** the same auto-fit, with hero state as part of the layout key.
+
+**Worth saying out loud:** yes — this is the more honest version of #1. The
+first fix looked like it worked and was still wrong. That is what most
+production bugs actually feel like.
+
+---
+
+## 3. The halt screen showed four green ticks while announcing a failure
+
+*2026-08-23*
+
+**Broke:** The halt fixture rendered `BOOK HALTED — CONSERVATION want 4,200 got
+4,050` above an invariant strip reading `✓ CONSERVATION`. The screen contradicted
+itself, in the exact frame that exists to be photographed.
+
+**Why:** The strip read its report from the last book frame. A halt frame is not
+a book frame, so the last *good* book's all-green report stayed on screen. The
+precedence was written as `book.inv || halt.inv` — the stalest source winning.
+
+**Fixed by:** inverting the precedence, with a comment saying why: the whole
+point of halting is that the strip goes red, so a halt report must outrank the
+report attached to the last frame that was still correct.
+
+**Worth saying out loud:** yes, and it is the best one. The failure mode of a
+correctness display is not that it fails to detect the problem — the checker
+caught it fine. It is that the *reporting path* quietly disagrees with the
+detector. An assertion nobody can see is not an assertion.
+
+---
+
+## 4. My first freeze test could only ever pass
+
+*2026-08-23*
+
+**Broke:** The spacebar-freeze test reported `HELD: true` and
+`ENGINE_KEPT_RUNNING: false` and I nearly filed that as a code bug.
+
+**Why:** The test pressed space fourteen seconds into a twenty-one second tape,
+by which point playback had reached the final frame. Nothing more was going to
+arrive, so "the engine kept running while the view was frozen" was trivially
+unobservable. The test was measuring at the one moment the property is
+unmeasurable.
+
+**Fixed by:** moving the freeze to mid-tape, where frames remain, and asserting
+both halves: the rendered sequence number must not move while held, and it must
+jump forward on release.
+
+**Worth saying out loud:** yes. A test that asserts the wrong thing is worse
+than no test, because it produces a green tick you will trust later. This one
+happened to fail loudly; the same mistake in the other direction would have
+passed forever.
+
+---
+
+## 5. I diagnosed a QR bug in the wrong codebase, and nearly "fixed" correct code
+
+*2026-08-23*
+
+**Broke:** The hand-written QR encoder round-tripped 223 of 224 cases against an
+independent decoder (jsQR, used only as a test oracle). The one failure was
+version 23 at error-correction level L, at maximum data fill.
+
+**What I concluded, and why it was reasonable:** I isolated it carefully first —
+it failed at five raster scales, so not a resolution artifact; at three different
+payloads, so not payload-dependent; and versions 21, 22, 24 and 25 all passed at
+the same scale, so not a size limit. A defect isolated to exactly one
+(version, ECC) cell, with its neighbours clean, is almost always one wrong number
+in a lookup table. I wrote that up as an instruction to fix the table.
+
+**What was actually true:** the wrong number was in the **oracle**. jsQR 1.4.0's
+alignment-pattern table lists version 23 as `[6, 30, 54, 74, 102]`. The spec's
+construction rule gives `[6, 30, 54, 78, 102]`. `74` is version 22's fourth
+centre, duplicated one row down — a copy-paste slip in the decoder. jsQR samples
+the symbol on a slightly wrong grid; at M, Q and H the extra redundancy absorbs
+the resulting errors, and at L it cannot. Our encoder was right the whole time.
+
+### The derivation, in full
+
+ISO/IEC 18004 Annex E does not give alignment centres as free-form data; they are
+*constructed*, which is what makes a single wrong entry provable rather than a
+matter of whose table you trust. For version `v`:
+
+```
+size   = 4v + 17                     # modules per side
+n      = floor(v / 7) + 2            # number of alignment tracks
+first  = 6                           # pinned
+last   = size - 7
+step   = ceil((size - 13) / (2 * (n - 1))) * 2      # forced EVEN
+tracks = [6] + [last - step*i  for i in n-2 .. 0]   # built DOWN from `last`
+```
+
+The two details that matter, and that a from-memory reconstruction gets wrong:
+**the step is rounded up to an even number**, and **the sequence is built
+downward from the last track** while the first stays pinned at 6 — so any
+remainder is absorbed by the *first* gap, not distributed.
+
+Version 23:
+
+```
+size = 4(23) + 17 = 109
+n    = floor(23/7) + 2 = 3 + 2 = 5
+last = 109 - 7 = 102
+step = ceil((109 - 13) / (2 * 4)) * 2 = ceil(96/8) * 2 = 12 * 2 = 24
+     -> 102, 78, 54, 30  (built downward), plus the pinned 6
+     => [6, 30, 54, 78, 102]        gaps 24, 24, 24, 24
+```
+
+Version 22, which is where the bad value came from:
+
+```
+size = 105,  n = 5,  last = 98
+step = ceil((105 - 13) / 8) * 2 = ceil(11.5) * 2 = 12 * 2 = 24
+     -> 98, 74, 50, 26, plus 6
+     => [6, 26, 50, 74, 98]         gaps 20, 24, 24, 24
+```
+
+So `74` is unambiguously v22's fourth track. jsQR lists v23 as
+`[6, 30, 54, 74, 102]`, whose gaps are `24, 24, 20, 28` — a *non-uniform interior*,
+which the construction above can never produce, because the interior tracks are
+generated by repeated subtraction of a single constant. The remainder is only
+ever allowed to land in the first gap. That is the tell: the defect is visible
+from the shape of the row alone, without any reference table.
+
+**Note for future-me:** the shortcut `(last - first) / (n - 1)` gives 24 for v23
+and looks like it works. It is wrong in general — for v22 it gives 23, an odd
+number, where the true step is 24. Do not reconstruct from the shortcut.
+
+### The three independent confirmations
+
+1. **Derivation from the construction rule** (above), done by hand, referring to
+   no table. Gives `78`, and shows jsQR's row is structurally impossible.
+2. **A second, unrelated encoder.** python-qrcode 8.2 encoding the same 1091-byte
+   payload at v23/L produces a symbol differing from ours in **0 of 11,881
+   modules** — byte-identical. And pristine jsQR *also* fails to decode
+   python-qrcode's own v23/L symbol. Two independent encoders agreeing, and the
+   decoder rejecting both, puts the fault on the decoder.
+3. **The literal bytes in the shipped bundle.** Grepping
+   `node_modules/jsqr/dist/jsQR.js` returns `[6, 30, 54, 74, 102]` directly. Not
+   inferred — read.
+
+A fourth, decisive check was available and was run: patching a *copy* of jsQR
+with the single character `74` → `78` turns every v23/L case from "no QR found"
+to an exact round-trip, and changes nothing else.
+
+**Downstream decision:** we kept the spec-correct value. Bending the encoder to
+satisfy a buggy decoder would produce symbols that real scanners — zxing, phone
+cameras — misread. The test harness reports both tallies rather than one:
+`223/224` against jsQR as published, `224/224` against jsQR with its one
+character corrected. Printing only the second number would be a lie.
+
+**Practical impact on this project: none.** The workshop URL is ~38 bytes, a
+version 3 symbol, which round-trips on the pristine decoder at all four ECC
+levels. This was never going to bite the demo. It would have bitten anyone who
+reused the encoder.
+
+**Worth saying out loud:** yes — this is the best entry in the file, and not
+because of QR codes. Every step of my isolation was sound and the conclusion was
+still wrong, because I never questioned the instrument. "The measurement
+disagrees with the code" has two suspects and I only ever charged one of them.
+The tell was available early and I walked past it: the failure was
+error-correction-level dependent, and a *capacity or block-structure* error
+cannot be ECC-dependent in that way — but a *sampling* error absorbed by
+redundancy can be, exactly.
+
+The part I would actually put on a slide: I then wrote the wrong diagnosis into
+a task and handed it off. It came back refusing the premise, with the audit that
+proved the encoder correct. Being wrong was cheap; being wrong *and
+unfalsifiable* would not have been. Whatever you hand work to — a colleague, a
+reviewer, a tool — has to be able to tell you your premise is wrong, and you
+have to have asked in a way that lets it.
+
+---
+
+## 6. The auto-fit cached an answer for a pane that then got smaller
+
+*2026-08-23*
+
+**Broke:** After the auto-fit from #1 and #2 was working, the idle-state and hero
+shots still overflowed — by 26px and 22px — while reporting the maximum depth.
+
+**Why:** Two separate caching mistakes in the same six lines. First, the fit ran
+on the very first render, when there was no book yet: an empty ladder trivially
+"fits" at maximum depth, and that answer got cached and never revisited. Second,
+the cache key was the viewport, hero flag and split flag — but the pane also
+shrinks as the footer and the room grid fill up with live data. The fit was
+correct for the taller pane it measured, and stale for the pane that existed a
+second later.
+
+**Fixed by:** refusing to cache a fit until there is content to measure, and
+putting the pane's own measured height into the key.
+
+**Worth saying out loud:** briefly. It is the classic cache-invalidation shape —
+the key described the inputs I was thinking about rather than the inputs that
+actually determined the answer.
+
+---
+
+## 7. I created my own race by parallelising work on one file
+
+*2026-08-23*
+
+**Broke:** A verification harness was rewritten underneath a running audit, so a
+reported test tally did not match what the file on disk produced.
+
+**Why:** I had two units of work running at once, both of which legitimately
+needed to edit the same harness. Nobody did anything wrong locally; there was
+simply no owner for that file.
+
+**Worth saying out loud:** yes, and it lands nicely next to the architecture.
+This whole project's answer to concurrency is *give every piece of mutable state
+exactly one owner*. I then went and ran two jobs against one file with no owner
+and got precisely the class of bug the design exists to prevent — not in the Go,
+in how I ran the work. The principle does not stop being true when it is
+inconvenient, and it applies above the code as well as inside it.
+
+---
+
+## 8. Playwright stalled screenshotting a pulsing dot
+
+*2026-08-23*
+
+**Broke:** The screenshot pass hung for thirty seconds and died on the hero shot,
+intermittently.
+
+**Why:** The live indicator is an infinite CSS animation. The screenshot call
+waits for visual stability by default, and an animation that never ends never
+becomes stable.
+
+**Fixed by:** `animations: 'disabled'` on the screenshot call.
+
+**Worth saying out loud:** probably not on stage — it is tooling trivia, not a
+design lesson. Recorded because it cost real time and will recur the next time
+anyone automates a shot of this page.

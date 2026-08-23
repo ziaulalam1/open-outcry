@@ -1,0 +1,251 @@
+/* projector.css — built for a projector and a camera, not a monitor.
+ *
+ * Three constraints drive every choice here:
+ *  1. Projectors wash out light fills, and a bright screen silhouettes the
+ *     presenter in photographs. So: near-black ground, luminous ink.
+ *  2. The photograph gets viewed at thumbnail size. So: oversized type, and
+ *     every state difference encoded NON-CHROMATICALLY as well as by colour
+ *     (weight, an edge bar, a dashed outline) — a thumbnail that loses
+ *     saturation still has to read.
+ *  3. No web fonts. An external font request is a thing that can fail in a
+ *     venue; the whole app must run with the wifi router unplugged.
+ */
+
+:root {
+  --s: 1;                      /* master type scale. &hero=true sets 1.3 */
+  --bg: #05060a;
+  --panel: #0a0d14;
+  --line: #19212e;
+  --ink: #e9eef5;
+  --dim: #74849a;
+  --dimmer: #3d4759;
+  --bid: #26d98a;
+  --ask: #ff5f6d;
+  --warn: #ffb225;
+  --halt: #ff2740;
+  --live: #35e08f;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0; height: 100%;
+  background: var(--bg); color: var(--ink);
+  font-family: var(--sans);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+.proj {
+  height: 100vh;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto auto;
+  gap: calc(0.8vh * var(--s));
+  padding: calc(1.4vh * var(--s)) calc(1.6vw * var(--s));
+}
+/* Rows are assigned EXPLICITLY. With positional placement, hiding the banner
+ * (which is hidden for the whole of act one) shifts every later child up a row
+ * — the panes inherit `auto` and the footer inherits the `1fr`, so the book
+ * renders into about half the screen with a dead band underneath it. Naming the
+ * rows makes the layout independent of which children happen to be visible. */
+.proj > .bar    { grid-row: 1; }
+.proj > .banner { grid-row: 2; }
+.proj > .panes  { grid-row: 3; }
+.proj > .foot   { grid-row: 4; }
+.proj > .grid   { grid-row: 5; }
+
+/* ── title bar: makes the photo self-documenting without a caption ────────── */
+.bar {
+  display: flex; align-items: baseline; gap: calc(1.4vw * var(--s));
+  border-bottom: 2px solid var(--line);
+  padding-bottom: calc(0.9vh * var(--s));
+}
+.bar h1 {
+  margin: 0; font-size: calc(2.5vw * var(--s));
+  letter-spacing: 0.16em; font-weight: 800; text-transform: uppercase;
+}
+.bar .sub { font-size: calc(1.05vw * var(--s)); color: var(--dim); letter-spacing: 0.04em; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar .right { margin-left: auto; flex: none; display: flex; align-items: baseline; gap: calc(1.6vw * var(--s)); }
+
+/* The live indicator earns its place: it is the proof the photo is not a slide. */
+.live { display: flex; align-items: center; gap: calc(0.5vw * var(--s)); font-size: calc(1.05vw * var(--s)); letter-spacing: 0.12em; color: var(--live); font-weight: 700; }
+.dot { width: calc(0.75vw * var(--s)); height: calc(0.75vw * var(--s)); border-radius: 50%; background: var(--live); animation: pulse 1.15s ease-in-out infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.82); } }
+.live.off { color: var(--dim); } .live.off .dot { background: var(--dim); animation: none; }
+
+.count { font-family: var(--mono); font-size: calc(1.45vw * var(--s)); font-weight: 700; }
+.count b { font-size: calc(2.1vw * var(--s)); }
+.count span { color: var(--dim); font-size: calc(0.95vw * var(--s)); letter-spacing: 0.1em; }
+
+/* ── plain-English banner: one line, no jargon, sized to be read from the back ─ */
+.banner {
+  font-size: calc(1.5vw * var(--s)); font-weight: 600; letter-spacing: 0.01em;
+  padding: calc(1.0vh * var(--s)) calc(1.2vw * var(--s));
+  border-left: calc(0.5vw * var(--s)) solid var(--warn);
+  background: linear-gradient(90deg, rgba(255,178,37,.14), transparent 70%);
+  color: #ffdca0;
+  overflow-wrap: break-word; min-width: 0;
+}
+.banner.hidden { display: none; }
+
+/* ── the panes ─────────────────────────────────────────────────────────────── */
+.panes { display: grid; gap: calc(1.2vw * var(--s)); min-height: 0; min-width: 0; grid-template-columns: minmax(0, 1fr); }
+.panes.split { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+
+.pane { display: flex; flex-direction: column; min-height: 0; min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: calc(0.5vw * var(--s)); overflow: hidden; }
+.pane.hidden { display: none; }
+.pane > header {
+  display: flex; align-items: baseline; gap: calc(0.9vw * var(--s));
+  padding: calc(0.9vh * var(--s)) calc(1.1vw * var(--s));
+  border-bottom: 1px solid var(--line);
+}
+.pane > header .tag { font-size: calc(1.25vw * var(--s)); font-weight: 800; letter-spacing: 0.18em; }
+.pane.fresh > header .tag { color: var(--live); }
+.pane.stale > header .tag { color: var(--warn); }
+.pane > header .lag { margin-left: auto; font-family: var(--mono); font-size: calc(1.15vw * var(--s)); color: var(--dim); }
+.pane > header .lag b { color: var(--warn); font-size: calc(1.4vw * var(--s)); }
+
+/* overflow:hidden is not cosmetic — without it a tall ladder rides up over the
+ * pane header, and the collision lands exactly on the best bid/ask. */
+.ladder { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: calc(0.5vh * var(--s)) calc(1.1vw * var(--s)); gap: calc(0.1vh * var(--s)); min-height: 0; overflow: hidden; }
+
+.row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: baseline; gap: calc(1.0vw * var(--s)); min-width: 0;
+  font-family: var(--mono); font-variant-numeric: tabular-nums;
+  font-size: calc(1.62vw * var(--s)); font-weight: 600;
+  padding: calc(0.2vh * var(--s)) calc(0.6vw * var(--s));
+  border-left: calc(0.35vw * var(--s)) solid transparent;
+  position: relative;
+}
+/* Two panes at once means half the width and the same height budget. */
+.panes.split .row { font-size: calc(1.42vw * var(--s)); gap: calc(0.7vw * var(--s)); }
+.panes.split .row.best { font-size: calc(1.92vw * var(--s)); }
+.panes.split .row .n { font-size: calc(0.9vw * var(--s)); }
+.panes.split .spread { font-size: calc(1.0vw * var(--s)); }
+.panes.split .spread b { font-size: calc(1.25vw * var(--s)); }
+.row .px { letter-spacing: 0.01em; }
+.row .qty { color: var(--ink); font-weight: 700; }
+.row .n { color: var(--dimmer); font-size: calc(1.05vw * var(--s)); }
+.row.ask .px { color: var(--ask); }
+.row.bid .px { color: var(--bid); }
+
+/* depth bar: a low-contrast fill behind the row, so relative size reads at a glance */
+.row .bar { position: absolute; inset: 0 auto 0 0; z-index: 0; opacity: .16; border-radius: 2px; }
+.row.ask .bar { background: var(--ask); } .row.bid .bar { background: var(--bid); }
+.row > * { position: relative; z-index: 1; }
+
+/* best bid / best ask: the two numbers the room actually watches */
+.row.best { font-size: calc(2.2vw * var(--s)); font-weight: 800; }
+.row.best.ask { border-left-color: var(--ask); }
+.row.best.bid { border-left-color: var(--bid); }
+
+.spread {
+  display: flex; align-items: baseline; justify-content: center; gap: calc(0.8vw * var(--s));
+  font-family: var(--mono); font-size: calc(1.2vw * var(--s)); color: var(--dim);
+  letter-spacing: 0.16em; margin: calc(0.5vh * var(--s)) 0;
+  border-top: 1px dashed var(--line); border-bottom: 1px dashed var(--line);
+  padding: calc(0.55vh * var(--s)) 0;
+}
+.spread b { color: var(--ink); font-size: calc(1.5vw * var(--s)); letter-spacing: 0; }
+
+/* ── divergence, encoded three ways so a thumbnail still reads ─────────────── */
+.row.diverged { border-left-color: var(--warn) !important; background: rgba(255,178,37,.10); font-weight: 800; }
+.row.diverged .delta { color: var(--warn); font-family: var(--mono); font-size: calc(1.2vw * var(--s)); font-weight: 700; }
+.row.ghost { opacity: .38; border-left: calc(0.35vw * var(--s)) dashed var(--dimmer); }
+.row.ghost .px, .row.ghost .qty { color: var(--dim) !important; }
+.row.phantom { border-left-color: var(--warn) !important; border-top: 1px dashed var(--warn); border-bottom: 1px dashed var(--warn); }
+
+/* ── bottom strip: invariants + counters ──────────────────────────────────── */
+.foot { display: grid; grid-template-columns: auto minmax(0, 1fr); min-width: 0; gap: calc(1.2vw * var(--s)); align-items: center; border-top: 2px solid var(--line); padding-top: calc(0.9vh * var(--s)); }
+
+/* Four checks, one line. Wrapped onto two rows they stop reading as a strip. */
+.inv { display: flex; gap: calc(0.6vw * var(--s)); flex-wrap: nowrap; min-width: 0; }
+.chk {
+  white-space: nowrap;
+  font-family: var(--mono); font-size: calc(0.95vw * var(--s)); font-weight: 700; letter-spacing: 0.08em;
+  padding: calc(0.55vh * var(--s)) calc(0.85vw * var(--s));
+  border: 2px solid var(--live); color: var(--live); border-radius: calc(0.35vw * var(--s));
+  display: flex; align-items: center; gap: calc(0.4vw * var(--s));
+}
+.chk.bad { border-color: var(--halt); color: var(--halt); background: rgba(255,39,64,.12); }
+
+/* nowrap: these five numbers are one row or they are a mess. */
+.stats { display: flex; gap: calc(1.35vw * var(--s)); justify-content: flex-end; flex-wrap: nowrap; align-items: flex-end; min-width: 0; }
+.stat { font-family: var(--mono); text-align: right; white-space: nowrap; }
+.stat b { display: block; font-size: calc(1.5vw * var(--s)); font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.05; }
+.stat span { font-size: calc(0.72vw * var(--s)); color: var(--dim); letter-spacing: 0.09em; text-transform: uppercase; }
+.stat.warn b { color: var(--warn); }
+.stat.chaos b { color: var(--ask); }
+.stat.ok b { color: var(--live); }
+
+/* ── presenter panel: one cell per session, pulsing on submit ──────────────── */
+/* On stage this separates "the room stopped trading" from "delivery broke":
+   cells still firing while the stale pane has gone quiet is the whole point. */
+.grid { display: flex; gap: calc(0.35vw * var(--s)); flex-wrap: wrap; align-items: center; }
+.grid .lbl { font-size: calc(0.8vw * var(--s)); color: var(--dim); letter-spacing: 0.11em; text-transform: uppercase; margin-right: calc(0.5vw * var(--s)); }
+.cell {
+  width: calc(2.05vw * var(--s)); height: calc(2.05vw * var(--s));
+  border-radius: calc(0.25vw * var(--s));
+  background: #10151f; border: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: calc(0.72vw * var(--s)); color: var(--dimmer);
+  transition: background .45s ease, color .45s ease, border-color .45s ease, transform .12s ease;
+}
+.cell.hot { background: var(--live); color: #04140c; border-color: var(--live); transform: scale(1.14); transition: none; }
+.cell.warm { background: #17493a; color: #9df0cd; border-color: #1e6a52; }
+
+/* ── idle / QR: how thirty phones actually reach the app ──────────────────── */
+.idle { position: fixed; inset: 0; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(2.4vh * var(--s)); z-index: 40; }
+.idle h2 { margin: 0; font-size: calc(3.4vw * var(--s)); letter-spacing: 0.14em; text-transform: uppercase; font-weight: 800; }
+.idle .url { font-family: var(--mono); font-size: calc(1.5vw * var(--s)); color: var(--live); letter-spacing: 0.04em; }
+.idle .hint { font-size: calc(1.2vw * var(--s)); color: var(--dim); letter-spacing: 0.08em; }
+/* White quiet zone is mandatory: a QR on a dark ground with no margin will not
+   scan. The card is the quiet zone. */
+.qr { background: #fff; padding: calc(1.5vh * var(--s)); border-radius: calc(0.6vw * var(--s)); line-height: 0; }
+.qr canvas, .qr svg { display: block; image-rendering: pixelated; width: min(38vh, 32vw); height: min(38vh, 32vw); }
+.idle.hidden { display: none; }
+
+/* ── halt: what the room sees if an invariant fails live ──────────────────── */
+.halt { position: fixed; inset: 0; background: rgba(5,6,10,.965); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(2vh * var(--s)); z-index: 50; text-align: center; }
+.halt h2 { margin: 0; font-size: calc(6.2vw * var(--s)); letter-spacing: 0.2em; color: var(--halt); font-weight: 900; }
+.halt .what { font-family: var(--mono); font-size: calc(2.0vw * var(--s)); color: var(--ink); }
+.halt .what em { color: var(--halt); font-style: normal; font-weight: 800; }
+.halt .meta { font-family: var(--mono); font-size: calc(1.15vw * var(--s)); color: var(--dim); letter-spacing: 0.08em; }
+.halt .lkg { font-size: calc(1.15vw * var(--s)); color: var(--dim); letter-spacing: 0.1em; text-transform: uppercase; }
+.halt.hidden { display: none; }
+
+/* ── freeze: a frame held for the camera. The engine keeps running. ────────── */
+.frozen-edge { position: fixed; inset: 0; pointer-events: none; border: calc(0.35vw * var(--s)) solid var(--warn); z-index: 30; display: none; }
+body.frozen .frozen-edge { display: block; }
+.freeze-tag { position: fixed; top: calc(1.4vh * var(--s)); left: 50%; transform: translateX(-50%); z-index: 31; background: var(--warn); color: #1a1200; font-weight: 800; font-size: calc(1.0vw * var(--s)); letter-spacing: 0.2em; padding: calc(0.5vh * var(--s)) calc(1.1vw * var(--s)); border-radius: 0 0 calc(0.4vw * var(--s)) calc(0.4vw * var(--s)); display: none; }
+body.frozen .freeze-tag { display: block; }
+
+/* ── hero mode: +30% type, non-essential chrome gone. For the photo moment. ── */
+body.hero .hint, body.hero .grid .lbl, body.hero .row .n, body.hero .bar .sub { display: none; }
+body.hero .stat.minor { display: none; }
+/* The room grid is compacted rather than hidden: it is the evidence that the
+ * room is still trading while the degraded pane has gone quiet, which is the
+ * whole point of the act-two photograph. But at +30% it would eat the vertical
+ * budget the ladder needs, and a book squeezed to three levels stops reading as
+ * a book. One tight row, no wrap. */
+/* At +30% the invariant strip and the counter row are together wider than the
+ * screen, and they silently overlap. The room grid already carries "how many
+ * people are trading", so the phone count is the one number that can go; the
+ * rest shrink slightly. Both halves of the act-two claim — the checks still
+ * green, the delivery visibly degraded — have to survive the photo. */
+body.hero .stat.phones { display: none; }
+body.hero .chk { font-size: calc(0.82vw * var(--s)); padding: calc(0.45vh * var(--s)) calc(0.7vw * var(--s)); }
+body.hero .inv { gap: calc(0.45vw * var(--s)); }
+/* Stacked, not squeezed. A flex row with justify-content:flex-end whose content
+ * is wider than its track overflows to the LEFT, silently drawing the counters
+ * on top of the invariant chips — the two things the act-two photo exists to
+ * show, destroying each other. Give them a row each. */
+body.hero .foot { grid-template-columns: minmax(0, 1fr); gap: calc(0.35vh * var(--s)); }
+body.hero .stats { gap: calc(1.6vw * var(--s)); justify-content: flex-start; }
+body.hero .stat b { font-size: calc(1.28vw * var(--s)); }
+body.hero .stat span { font-size: calc(0.62vw * var(--s)); }
+body.hero .grid { flex-wrap: nowrap; overflow: hidden; gap: calc(0.25vw * var(--s)); }
+body.hero .cell { width: calc(1.35vw * var(--s)); height: calc(1.35vw * var(--s)); font-size: 0; }
