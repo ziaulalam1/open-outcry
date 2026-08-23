@@ -403,3 +403,103 @@ pipeline, not by the assertion at the end of it. The thing worth asking of any
 guard you rely on is not "does it pass?" but "have I ever seen it fail, on
 purpose, in the exact way I would invoke it?" — and for this one the honest
 answer was no until I checked.
+
+---
+
+## 11. Loopback lies about backpressure
+
+*2026-08-23*
+
+**Broke:** The test asserting that a slow client costs itself frames reported
+`backpressure drops = 0`, while nine healthy clients each received 776 frames.
+The drop policy — the single mechanism act two rests on — appeared not to work.
+
+**Why:** It worked fine. The test could not see it. Linux auto-tunes loopback
+socket buffers into the megabytes, so a client that never calls `ReadMessage`
+still absorbs several hundred kilobytes before the server's writes block. Until
+the write pump blocks, the send channel never fills, and the drop counter is
+correctly zero. A phone on venue wifi has no such buffer.
+
+**Fixed by:** dialling that one client through a `net.Dialer` whose `Control`
+sets `SO_RCVBUF` to the kernel minimum, which reproduces a constrained consumer
+in about a second. The counter went from 0 to 557 while the healthy clients
+still received 1,780 frames each — one slow consumer costing itself and nothing
+else, which is the property, demonstrated rather than asserted.
+
+**Worth saying out loud:** yes, briefly, and it is a good pairing with the
+chaos-layer argument. Testing a distributed failure on one machine means the
+machine's own generosity is part of your test fixture. The environment has
+defaults that are kinder than production, and a green test can mean "the
+condition never occurred" rather than "the code handled it."
+
+---
+
+## 12. The end-to-end test measured the lag after the lag had drained
+
+*2026-08-23*
+
+**Broke:** The first full two-tab run armed chaos at a 1.2 second delay, tapped
+some orders, waited 2.2 seconds, and read `behind by 0.0s / 0 frames` with zero
+diverged levels. It looked like the chaos line was not delaying anything.
+
+**Why:** The delay was 1.2s and the measurement was at 2.2s. Every delayed frame
+had already been delivered. Lag is only observable while frames are still in
+flight; after the traffic stops, a correctly-working delay line is
+indistinguishable from one that does nothing.
+
+**Fixed by:** driving sustained load with `cmd/swarm` and sampling the projector
+repeatedly *during* it, keeping the worst divergence seen. It then read `behind
+by 1.5s / 72 frames`, ten diverged levels, 162 frames never delivered, and all
+four invariants still green.
+
+**Worth saying out loud: yes — this is the third one.** Entry 4 was the freeze
+test measuring at the end of the tape. Entry 10 was the architecture test
+serving a cached answer. This is the same shape again: *the code was right, and
+the measurement was taken where the property could not be seen.*
+
+Three instances in one build is not bad luck, it is a category. The useful
+formulation to give the room: **before trusting a green result, ask what the red
+version would have looked like and whether your setup could have produced it.**
+For all three of these the honest answer was no.
+
+---
+
+## 13. The room grid worked against the fixture and was empty against the server
+
+*2026-08-23*
+
+**Broke:** The presenter panel — one pulsing cell per trading session, the thing
+that separates "the room stopped trading" from "delivery broke" — rendered
+perfectly against the fixture tape and was completely empty against the live
+server.
+
+**Why:** The tape carries a `roster` array, because when it was hand-authored a
+roster was the obvious way to describe who was in the room. The view read it. The
+real server has no roster and cannot have one: nobody logs in, sessions appear
+when a phone connects, and the server never knows who is present until they act.
+So the view depended on a field only the fixture ever supplied.
+
+**Fixed by:** deriving the grid from the sessions actually observed acting, which
+the book frames already carry as `actor`. The roster is now an optional
+supplement rather than the source. Under real load: ten cells, all pulsing, ids
+drawn from the connected clients.
+
+**Worth saying out loud: yes, and it is the strongest self-criticism available,
+because it cuts against this project's own headline decision.** Building the view
+first against a hand-authored fixture is the thing I would defend hardest about
+the build order: it made the wire format concrete, it made the view provably
+independent of the engine, and it produced a working screen before a line of Go
+existed.
+
+And it has exactly this failure mode. A fixture is written by the same person who
+writes the view, at the same moment, so it supplies whatever the view finds
+convenient. That is precisely what makes it productive, and precisely what makes
+it able to encode an assumption the real system can never satisfy. The golden
+test in `internal/wire` catches the reverse direction — a field the view reads
+that the server does not send — but it cannot catch this one, because the field
+*was* sent, by the fixture, forever.
+
+The honest conclusion is not "do not build view-first". It is that fixture-first
+buys you a finished view and owes you one integration pass whose only job is to
+find what the fixture was quietly providing. Budget for that pass; do not
+discover it on stage.

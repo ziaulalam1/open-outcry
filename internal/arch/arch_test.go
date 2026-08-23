@@ -62,6 +62,35 @@ var rules = map[string]rule{
 		hardBans:  []string{"net/http", "encoding/json"},
 		why:       "The opening ladder is just commands. It goes through the front door.",
 	},
+	"internal/wire": {
+		mayImport: []string{"internal/engine", "internal/invariant"},
+		hardBans:  []string{"net/http", "github.com/gorilla/websocket"},
+		why: "wire is the airlock: the only package that may name the wire format. " +
+			"It knows about domain values and about bytes, and nothing about sockets.",
+	},
+	"internal/loop": {
+		mayImport:  []string{"internal/engine", "internal/invariant"},
+		directBans: []string{"encoding/json", "net", "net/http"},
+		hardBans:   []string{"net/http", "github.com/gorilla/websocket"},
+		why: "The loop owns the book pointer. It publishes bytes through interfaces " +
+			"declared consumer-side, so it can neither encode nor reach a socket — " +
+			"which is what keeps encoding/json confined to one package.",
+	},
+	"internal/hub": {
+		mayImport:  nil,
+		directBans: []string{"encoding/json"},
+		why: "The hub cannot name a domain type. That is what makes \"the transport " +
+			"cannot reach the engine\" a compile-time fact. It owns the counters but " +
+			"cannot marshal them, which is why StatsEncoder is injected.",
+	},
+	"internal/chaos": {
+		mayImport:  nil,
+		directBans: []string{"encoding/json", "net", "net/http"},
+		hardBans:   []string{"github.com/gorilla/websocket", "net/http"},
+		why: "Chaos is a decorator whose only outward reference is a func value. It " +
+			"cannot name engine.Book or engine.Command, so \"the chaos layer cannot " +
+			"reach the engine\" is enforced by the compiler and act two's claim holds.",
+	},
 	"internal/arch": {
 		mayImport: nil,
 		why:       "This package is the rules themselves.",

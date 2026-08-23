@@ -39,6 +39,11 @@ const num = (n) => n.toLocaleString('en-US')
 const MAX_LEVELS = 7
 const MIN_LEVELS = 3
 
+// The room grid is bounded. Thirty phones is the expected case; an unbounded
+// grid would wrap and eat the ladder's height the moment someone opened a
+// second tab per person.
+const MAX_CELLS = 40
+
 export function mountProjector(root, { hero = false, showGrid = true, idle: forceIdle = false } = {}) {
   if (hero) document.body.classList.add('hero')
   document.documentElement.style.setProperty('--s', hero ? '1.3' : '1')
@@ -363,7 +368,13 @@ export function mountProjector(root, { hero = false, showGrid = true, idle: forc
   }
 
   function renderGrid() {
-    const roster = st.meta.roster || []
+    // The room populates ITSELF from who has actually traded, rather than from a
+    // roster handed down at connect time. The live server does not know who is
+    // in the room — nobody logs in — and a grid that stays empty until someone
+    // supplies a list is a grid that is empty on the day. A cell appears the
+    // first time a session acts, which is also the moment it earns one.
+    const seen = new Set([...(st.meta.roster || []), ...st.sessions.keys()])
+    const roster = [...seen].sort().slice(0, MAX_CELLS)
     for (const id of roster) {
       let cell = gridWrap.querySelector(`[data-s="${id}"]`)
       if (!cell) {
@@ -375,6 +386,12 @@ export function mountProjector(root, { hero = false, showGrid = true, idle: forc
       const age = seen == null ? Infinity : st.clock - seen
       cell.classList.toggle('warm', age < 4000)
     }
+    // Drop cells for sessions no longer in the window, so the grid cannot grow
+    // without bound over a long session.
+    const keep = new Set(roster)
+    gridWrap.querySelectorAll('.cell').forEach((c) => {
+      if (!keep.has(c.dataset.s)) c.remove()
+    })
   }
 
   function pulse(id) {

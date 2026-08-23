@@ -163,4 +163,4 @@ func (b *Book) own(s Side) *ladder {
 	return &b.asks
 }
 
-func (b *Book) opposite(s Side) *ladder { return b.own(s.opposite()) }
+func (b *Book) opposite(s Side) *ladder { return b.own(s.Opposite()) }

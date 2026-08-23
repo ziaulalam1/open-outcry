@@ -28,7 +28,10 @@ func (s Side) String() string {
 	return "sell"
 }
 
-func (s Side) opposite() Side { return 1 - s }
+// Opposite is exported because the wire layer legitimately needs it to name the
+// maker's side on a fill: the trade event carries the taker's side, and the
+// maker is by definition on the other one.
+func (s Side) Opposite() Side { return 1 - s }
 
 // Ticks is a price in CENTS. There is no float anywhere in this repository.
 //
