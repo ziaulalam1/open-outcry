@@ -1,13 +1,165 @@
-/* trader.css — phone-first. Large touch targets, no hover-dependent affordances,
- * readable on a bad connection and a cracked screen. Built at checkpoint 3. */
+/* trader.css — a phone, held in one hand, at the back of a room.
+ *
+ * Every decision here follows from that sentence:
+ *
+ *  - The actions live in the BOTTOM half. Thumb reach on a large phone is the
+ *    lower two-thirds; anything in the top corner needs a second hand or a
+ *    re-grip, and a re-grip is a person who stops participating.
+ *  - Nothing requires typing. Typing a price on a phone, standing up, in a dim
+ *    room, is the difference between a book with depth and a book with four
+ *    orders in it. Participation rate IS the demo.
+ *  - Targets are 84px tall, well above the 44-48px platform minimum, because
+ *    the user is not looking at the screen while they tap — they are looking at
+ *    the projector.
+ *  - Colour is never the only signal: buy and sell differ in position, label and
+ *    border weight too. Roughly one man in twelve cannot rely on red/green.
+ */
 
-.trader-stub {
-  min-height: 100vh;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 12px; text-align: center; padding: 24px;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  color: #e9eef5; background: #05060a;
+:root {
+  --t-bg: #06070b;
+  --t-panel: #0d1119;
+  --t-line: #1c2431;
+  --t-ink: #eef2f7;
+  --t-dim: #7b8a9e;
+  --t-buy: #24d98a;
+  --t-buy-ink: #04150d;
+  --t-sell: #ff5f6d;
+  --t-sell-ink: #1a0407;
+  --t-warn: #ffb225;
+  --t-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --t-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
-.trader-stub h1 { margin: 0; letter-spacing: .18em; font-size: 26px; }
-.trader-stub p { margin: 0; font-size: 16px; }
-.trader-stub .dim { color: #74849a; font-size: 14px; }
+
+.trader {
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column;
+  background: var(--t-bg); color: var(--t-ink);
+  font-family: var(--t-sans);
+  /* Respect the notch and the home indicator, or the last row of buttons ends
+     up under the gesture bar and stops responding. */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  overscroll-behavior: none;
+  -webkit-user-select: none; user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── header ───────────────────────────────────────────────────────────────── */
+.t-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid var(--t-line);
+}
+.t-head h1 { margin: 0; font-size: 14px; letter-spacing: .18em; font-weight: 800; }
+.t-you {
+  margin-left: auto; font-family: var(--t-mono); font-size: 12px; color: var(--t-dim);
+  display: flex; align-items: center; gap: 6px;
+}
+.t-conn { width: 8px; height: 8px; border-radius: 50%; background: var(--t-buy); }
+.t-conn.off { background: var(--t-warn); }
+.t-conn.dead { background: var(--t-sell); }
+
+/* ── market strip: read-only, glanceable, top of screen ───────────────────── */
+.t-market {
+  display: grid; grid-template-columns: 1fr auto 1fr;
+  align-items: center; gap: 8px; padding: 14px;
+  border-bottom: 1px solid var(--t-line);
+}
+.t-px { font-family: var(--t-mono); font-variant-numeric: tabular-nums; }
+.t-px .lbl { font-size: 10px; letter-spacing: .16em; color: var(--t-dim); }
+.t-px .val { font-size: 30px; font-weight: 800; line-height: 1.1; }
+.t-px .sz { font-size: 12px; color: var(--t-dim); }
+.t-px.bid { text-align: left; } .t-px.bid .val { color: var(--t-buy); }
+.t-px.ask { text-align: right; } .t-px.ask .val { color: var(--t-sell); }
+.t-spread { text-align: center; font-family: var(--t-mono); }
+.t-spread b { display: block; font-size: 15px; }
+.t-spread span { font-size: 10px; letter-spacing: .12em; color: var(--t-dim); }
+
+/* ── your fills ───────────────────────────────────────────────────────────── */
+.t-fills { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 14px; }
+.t-fills .empty { color: var(--t-dim); font-size: 13px; text-align: center; padding: 18px 0; line-height: 1.5; }
+.t-fill {
+  display: grid; grid-template-columns: 46px 1fr auto; gap: 8px; align-items: baseline;
+  font-family: var(--t-mono); font-size: 15px;
+  padding: 7px 0; border-bottom: 1px solid var(--t-line);
+}
+.t-fill .side { font-weight: 800; font-size: 12px; letter-spacing: .1em; }
+.t-fill.buy .side { color: var(--t-buy); } .t-fill.sell .side { color: var(--t-sell); }
+.t-fill .when { color: var(--t-dim); font-size: 11px; }
+.t-fill.pending { opacity: .55; }
+.t-fill.pending .when::after { content: " · sending"; color: var(--t-warn); }
+.t-fill.rejected .side { color: var(--t-warn); }
+
+/* ── size chips: tapping beats typing ─────────────────────────────────────── */
+.t-size { display: flex; gap: 8px; padding: 10px 14px 6px; align-items: center; }
+.t-size .lbl { font-size: 10px; letter-spacing: .16em; color: var(--t-dim); }
+.chip {
+  flex: 1; min-height: 48px; border-radius: 10px;
+  background: var(--t-panel); border: 1px solid var(--t-line); color: var(--t-ink);
+  font-family: var(--t-mono); font-size: 17px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+.chip.on { background: #1b2636; border-color: #35506f; color: #fff; box-shadow: inset 0 0 0 1px #35506f; }
+
+/* ── the action grid: the whole point, in the thumb zone ──────────────────── */
+.t-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 6px 14px 10px; }
+.act {
+  min-height: 84px; border-radius: 14px; border: 2px solid transparent;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  font-family: var(--t-sans); color: var(--t-ink);
+  transition: transform .06s ease, filter .06s ease;
+}
+.act:active { transform: scale(.97); filter: brightness(1.15); }
+.act .verb { font-size: 13px; font-weight: 800; letter-spacing: .16em; }
+.act .px { font-family: var(--t-mono); font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.act .hint { font-size: 10.5px; color: rgba(255,255,255,.62); letter-spacing: .04em; }
+
+/* Passive: outlined. Aggressive: filled. The fill weight says "this one trades
+   right now" without relying on the label being read. */
+.act.buy  { background: rgba(36,217,138,.10); border-color: var(--t-buy); }
+.act.sell { background: rgba(255,95,109,.10); border-color: var(--t-sell); }
+.act.buy .verb, .act.buy .px { color: var(--t-buy); }
+.act.sell .verb, .act.sell .px { color: var(--t-sell); }
+.act.hot.buy  { background: var(--t-buy);  border-color: var(--t-buy); }
+.act.hot.sell { background: var(--t-sell); border-color: var(--t-sell); }
+.act.hot.buy  .verb, .act.hot.buy  .px { color: var(--t-buy-ink); }
+.act.hot.sell .verb, .act.hot.sell .px { color: var(--t-sell-ink); }
+.act.hot .hint { color: rgba(0,0,0,.62); }
+.act[disabled] { opacity: .32; }
+
+/* ── free entry: present, deliberately secondary ──────────────────────────── */
+.t-free { border-top: 1px solid var(--t-line); }
+.t-free > summary {
+  list-style: none; cursor: pointer;
+  padding: 13px 14px; font-size: 13px; color: var(--t-dim); letter-spacing: .04em;
+}
+.t-free > summary::-webkit-details-marker { display: none; }
+.t-free > summary::before { content: "▸ "; }
+.t-free[open] > summary::before { content: "▾ "; }
+.t-free .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 14px 12px; }
+.t-free label { font-size: 10px; letter-spacing: .14em; color: var(--t-dim); display: block; margin-bottom: 4px; }
+.t-free input {
+  width: 100%; min-height: 50px; border-radius: 10px; padding: 0 12px;
+  background: var(--t-panel); border: 1px solid var(--t-line); color: var(--t-ink);
+  font-family: var(--t-mono); font-size: 18px;
+}
+.t-free .send { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.t-free .send button { min-height: 58px; border-radius: 10px; font-weight: 800; letter-spacing: .12em; font-size: 14px; }
+.t-free .send .b { background: var(--t-buy); color: var(--t-buy-ink); border: none; }
+.t-free .send .s { background: var(--t-sell); color: var(--t-sell-ink); border: none; }
+
+/* ── toast: confirmation you can see without looking away for long ────────── */
+/* Anchored to the middle of the screen, over the fills list, NOT above the
+ * buttons: a confirmation that covers the control you just pressed hides the
+ * next tap, and on a phone held at arm's length that reads as an unresponsive
+ * app. The empty space in the fills list is the one region guaranteed to be
+ * free of both the market strip and the thumb zone. */
+.t-toast {
+  position: fixed; left: 50%; top: 44%; transform: translateX(-50%);
+  background: #eef2f7; color: #06070b; font-weight: 700; font-size: 14px;
+  padding: 9px 16px; border-radius: 999px; opacity: 0; pointer-events: none;
+  transition: opacity .18s ease; z-index: 20; white-space: nowrap;
+}
+.t-toast.show { opacity: .96; }
+.t-toast.bad { background: var(--t-warn); }
+
+button { font: inherit; cursor: pointer; }

@@ -44,16 +44,38 @@ async function fixtureSource(name, onFrame, onMeta) {
 
 // The live path. Deliberately the thinner of the two: everything interesting
 // already happened in the view, which was finished before this existed.
-function socketSource(feed, onFrame, onMeta) {
+//
+// Assumes the connection is bad, because in a room of thirty phones on one
+// access point it will be. Reconnects with backoff, and buffers outbound orders
+// across a drop so a tap during a two-second gap is still a trade rather than a
+// silent no-op. The buffer is small and drops oldest-first: a stale order is
+// worse than no order, and unbounded buffering on a phone is how you end up
+// submitting forty orders at once when the wifi returns.
+function socketSource(feed, onFrame, onMeta, session) {
+  const MAX_QUEUED = 8
+  let ws = null
   let backoff = 250
+  let queued = []
+
+  const flush = () => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return
+    const pending = queued
+    queued = []
+    for (const m of pending) ws.send(JSON.stringify(m))
+  }
+
   const connect = () => {
     const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-    const ws = new WebSocket(`${proto}://${location.host}/ws?feed=${feed}`)
-    ws.onopen = () => { backoff = 250; onMeta({ connected: true }) }
+    const q = new URLSearchParams({ feed })
+    if (session) q.set('session', session)
+    ws = new WebSocket(`${proto}://${location.host}/ws?${q}`)
+
+    ws.onopen = () => { backoff = 250; onMeta({ connected: true }); flush() }
     ws.onmessage = (e) => {
-      const f = JSON.parse(e.data)
-      if (f.type === 'hello') onMeta(f)
-      else onFrame(f)
+      let f
+      try { f = JSON.parse(e.data) } catch { return } // never let one bad frame kill the feed
+      if (f.type === 'hello') onMeta({ ...f, connected: true })
+      onFrame(f)
     }
     ws.onclose = () => {
       onMeta({ connected: false })
@@ -63,7 +85,14 @@ function socketSource(feed, onFrame, onMeta) {
     ws.onerror = () => ws.close()
   }
   connect()
-  return { send: () => {} }
+
+  return {
+    send(msg) {
+      if (ws && ws.readyState === WebSocket.OPEN) { ws.send(JSON.stringify(msg)); return }
+      queued.push(msg)
+      if (queued.length > MAX_QUEUED) queued.shift()
+    },
+  }
 }
 
 // ── Mount ─────────────────────────────────────────────────────────────────────
