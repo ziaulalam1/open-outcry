@@ -8,35 +8,37 @@ a log of successes would be worthless for that purpose.
 Format: what broke · why it broke · what it changed · whether it is worth saying
 out loud to a room.
 
-**Standing instruction for `docs/slides.md`.** Act three is built on entries **5
-and 10 together**, not on either alone, and not on a trade-off table. The
-trade-offs come after.
+**Standing instruction for `docs/slides.md`.** Act three is built on entries
+**5, 10 and 13 together** — not on any one of them, and not on a trade-off table.
+The trade-offs come after.
 
-The theme is: **verification tooling needs verifying.** The two entries are the
-same lesson arriving from opposite directions, which is why both are needed and
-why neither is sufficient:
+The theme is: **verification tooling needs verifying.** Three entries, three
+distinct ways a measuring instrument lies, all found by accident in one build:
 
-- **Entry 5 — the instrument was wrong, and every step of my isolation was
-  sound.** Five raster scales, three payloads, clean neighbours: a textbook
-  bisection, and the conclusion was still false, because the one thing I never
-  put on trial was the decoder I was measuring with.
-- **Entry 10 — the guard was dead, and every run said PASS.** The architecture
-  test's logic was correct the whole time. Its *cache key* was wrong, so it
-  replayed a stale green tick over a live violation. Nothing was measured; the
-  answer was served from memory.
+- **Entry 5 — the instrument was WRONG.** Five raster scales, three payloads,
+  clean neighbours: a textbook bisection, and the conclusion was still false,
+  because the one thing never put on trial was the decoder doing the measuring.
+- **Entry 10 — the instrument was DEAD.** The architecture test's logic was
+  correct throughout. Its *cache key* was wrong, so it replayed a stale green
+  tick over a live violation. Nothing was measured; the answer came from memory.
+- **Entry 13 — the instrument was more GENEROUS than production.** The room grid
+  worked against the fixture and was empty against the server, because the tape
+  carried a roster and production cannot have one — nobody logs in. This one
+  cuts against the project's own fixture-first build order, which I would still
+  choose.
 
-One is "I trusted the measurement". The other is "there was no measurement". A
-green check mark is a claim made by an entire pipeline — the assertion, the
+A green check mark is a claim made by an entire pipeline — the assertion, the
 instrument, and the reporting layer between them — and in this build each of
-those three failed at least once.
+those failed at least once.
 
-Learning it twice in a single project is the point, not an embarrassment to
-compress. Two independent instances is the difference between an anecdote and a
-pattern, and the honest question it leaves behind is the one to put to the room:
-*have you ever watched your CI fail on purpose, in the exact way you invoke it?*
+**Entry 14 is held in reserve** and is the strongest of the four, because it is
+the only one where I built the broken instrument myself: a cumulative counter
+read across successive trials, producing a dose-response curve out of nothing.
+Use it if the room is technical enough to enjoy it, or if a question opens the
+door. It is the natural answer to *"how would you know?"*
 
-The wrong task I wrote up in earnest stays in the record. The reversal is the
-evidence; deleting the wrong turn would delete the proof that it was one.
+The wrong turns stay in the record. The reversals are the evidence; deleting
+them would delete the proof that they were reversals.
 
 ---
 
@@ -503,3 +505,79 @@ The honest conclusion is not "do not build view-first". It is that fixture-first
 buys you a finished view and owes you one integration pass whose only job is to
 find what the fixture was quietly providing. Budget for that pass; do not
 discover it on stage.
+
+---
+
+## 14. I nearly shipped a rehearsal flag that does nothing, on a confounded measurement
+
+*2026-08-31*
+
+**Broke:** Asked to add a way to make the projector's slow-consumer drop counter
+move during a local rehearsal — it reads 0 on localhost because the kernel
+auto-tunes socket buffers — I added a `-rcvbuf` flag to `cmd/swarm` that shrinks
+a blackholed client's `SO_RCVBUF` to the kernel minimum. It mirrored what the
+server test already did, so I was confident in it.
+
+It did not work. Then it appeared to work. Both readings were wrong.
+
+**Why the first reading was wrong:** the flag genuinely did nothing at the rate I
+first tried, because the blackholed clients subscribe as *traders*, and the
+trader subscription is the lowest-volume feed in the system. The server's own
+send buffer absorbed everything before the client's receive buffer mattered.
+
+**Why the second reading was worse:** I then ran three conditions in sequence —
+no flag, flag, flag with a different feed — against **one long-lived server
+process**, and read 0, then 1346, then 3853, then 6390. It looked like a clean
+dose-response curve. It was one cumulative counter. The projector's drop counter
+counts for the life of the server, so every run inherited the previous run's
+total. I had built a measurement in which *any* change appears to help, because
+the number only ever goes up.
+
+The tell was there and I nearly walked past it: the **control** read higher than
+the treatment. That cannot happen if the treatment is the cause, and it is
+exactly what you would expect if elapsed traffic is the cause.
+
+**What the clean experiment said,** one fresh server process per condition:
+
+| condition | `dropped · slow phone` |
+|---|---|
+| rate 6, no `-rcvbuf` | 0 |
+| rate 6, with `-rcvbuf 2048` | 0 |
+| rate 30, no `-rcvbuf` | 1352 |
+| rate 30, with `-rcvbuf 2048` | 1312 |
+
+and separately, at rate 30 with no flag at all:
+
+| condition | `dropped · slow phone` |
+|---|---|
+| blackhole on the projector feed | 1337 |
+| blackhole on the trader feed | 0 |
+
+**Throughput and feed choice are the variables. The socket buffer is not.**
+1352 versus 1312 is noise in the opposite direction from the hypothesis.
+
+**Fixed by:** deleting the flag. It was already written, already documented, and
+already had a help string explaining its purpose — and it demonstrably did
+nothing. Shipping it would have added a knob that a future reader would trust,
+reach for, and be misled by. What survives is the change that was measured to
+matter (blackholed clients subscribe to the busiest feed) and an accurate note
+in `swarm` telling you to raise the rate instead.
+
+**Worth saying out loud: yes — this is the fourth one, and the first where I
+built the broken instrument myself.**
+
+Entry 5 was an instrument that was wrong. Entry 10 was an instrument that was
+dead. Entry 13 was an instrument more generous than production. This one is
+different in kind: the earlier three were inherited or accidental, and this was a
+measurement apparatus I designed, in a project whose entire thesis is that you
+should verify your instruments.
+
+The specific failure — **reading a cumulative counter across successive trials
+and calling the differences an effect** — is not exotic. It is the most ordinary
+benchmarking mistake there is, and I made it while writing the document that
+warns other people about measurement traps.
+
+The generalisation, and the one I would give the room: **a measurement where the
+number can only go up is not a measurement.** Ask what the control looks like
+before you run the treatment. If you cannot describe a result that would make you
+abandon the change, you are not testing it.
