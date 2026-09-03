@@ -1,4 +1,15 @@
+# Build output
 open-outcry
 swarm
 *.test
+
+# Workshop material — written for whoever is running the event, not for a
+# reader of this repository. Kept locally, never published.
+docs/shot-list.md
+docs/checkpoints/
+docs/slides.md
 shot-*.png
+
+# Agent config
+CLAUDE.md
+.claude/

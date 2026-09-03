@@ -4,8 +4,8 @@ import "github.com/ziaulalam1/open-outcry/internal/invariant"
 
 // This file is the entire cost of the package boundary between the engine and
 // the checker: about thirty lines of adapters. It buys the only defensible
-// answer to the question an interviewer actually asks — "couldn't the checker
-// just read a counter the matcher already set?" — which is that it cannot name
+// answer to the obvious objection — "couldn't the checker just read a counter
+// the matcher already set?" — which is that it cannot name
 // a single type in this package, so no.
 //
 // Note what is deliberately NOT adapted: level.total. The engine maintains a

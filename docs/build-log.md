@@ -1,18 +1,12 @@
 # Build log — things that broke, and what they taught
 
-Kept as they happened, not reconstructed afterwards. Act three of the talk has a
-beat called *"here's what I got wrong the first time"*; this file is where that
-beat gets its material. Entries are only added when something actually failed —
-a log of successes would be worthless for that purpose.
+Kept as they happened, not reconstructed afterwards. Entries are only added when
+something actually failed — a log of successes would teach nothing.
 
 Format: what broke · why it broke · what it changed · whether it is worth saying
-out loud to a room.
+out loud.
 
-**Standing instruction for `docs/slides.md`.** Act three is built on entries
-**5, 10 and 13 together** — not on any one of them, and not on a trade-off table.
-The trade-offs come after.
-
-The theme is: **verification tooling needs verifying.** Three entries, three
+Four entries share a theme: **verification tooling needs verifying.** Four
 distinct ways a measuring instrument lies, all found by accident in one build:
 
 - **Entry 5 — the instrument was WRONG.** Five raster scales, three payloads,
@@ -26,16 +20,14 @@ distinct ways a measuring instrument lies, all found by accident in one build:
   carried a roster and production cannot have one — nobody logs in. This one
   cuts against the project's own fixture-first build order, which I would still
   choose.
+- **Entry 14 — I built the broken instrument myself**, which makes it the
+  strongest of the four: a cumulative counter read across successive trials,
+  producing a dose-response curve out of nothing. It is the natural answer to
+  *"how would you know?"*
 
 A green check mark is a claim made by an entire pipeline — the assertion, the
 instrument, and the reporting layer between them — and in this build each of
 those failed at least once.
-
-**Entry 14 is held in reserve** and is the strongest of the four, because it is
-the only one where I built the broken instrument myself: a cumulative counter
-read across successive trials, producing a dose-response curve out of nothing.
-Use it if the room is technical enough to enjoy it, or if a question opens the
-door. It is the natural answer to *"how would you know?"*
 
 The wrong turns stay in the record. The reversals are the evidence; deleting
 them would delete the proof that they were reversals.

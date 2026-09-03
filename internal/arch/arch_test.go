@@ -6,7 +6,7 @@
 // way of defending that claim — a paragraph in the README, a header comment, a
 // careful diagram — is documentation, and documentation decays the first time
 // somebody is in a hurry. This file is the only defence that survives the next
-// edit, and it is the answer to the question an interviewer actually asks: not
+// edit, and it is the answer to the question that actually matters: not
 // "is it decoupled?" but "how do you know it stays decoupled?"
 package arch
 
