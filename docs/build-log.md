@@ -6,7 +6,7 @@ something actually failed — a log of successes would teach nothing.
 Format: what broke · why it broke · what it changed · whether it is worth saying
 out loud.
 
-Five entries share a theme: **verification tooling needs verifying.** Five
+Six entries share a theme: **verification tooling needs verifying.** Six
 distinct ways a measuring instrument lies, all found by accident in one build:
 
 - **Entry 5 — the instrument was WRONG.** Five raster scales, three payloads,
@@ -29,6 +29,12 @@ distinct ways a measuring instrument lies, all found by accident in one build:
   overflowed and been counted", phrased as a result, with no subscription to
   the feed carrying it. Not wrong, not dead, not generous, not confounded —
   outside its own observability, and worded like a measurement anyway.
+- **Entry 16 — every instrument was RIGHT, and all of them were pointed at the
+  wrong thing.** `.gitignore` excluded both `cmd/` packages, so the published
+  repository had no main package in it. Build, tests, vet, the architecture
+  test and `git status` were all green, because every one of them reads the
+  working tree and the question that mattered was what is in the repository.
+  No false reading to catch: a gap emits nothing.
 
 A green check mark is a claim made by an entire pipeline — the assertion, the
 instrument, and the reporting layer between them — and in this build each of
@@ -742,3 +748,101 @@ run both times. Fixed with a `done` channel that `Stop()` waits on.
 **Generalisation:** the party that fails to observe an orderly shutdown is the
 *peer*, so a clean shutdown cannot be confirmed from the side doing the shutting
 down. Check the other end's log, or you are grading your own work.
+
+---
+
+## 16. The repository never contained a main package, and every local check said fine
+
+*2026-09-04*
+
+**Broke:** Staging the entry-15 fixes, `git status` listed two documentation
+files and none of the four Go files I had just edited. `git ls-files cmd/swarm/`
+returned nothing at all.
+
+Neither did `git ls-files cmd/open-outcry/`. **There was no `cmd/` directory in
+the repository.** It had published `internal/engine`, `internal/invariant`,
+`internal/hub`, `internal/loop`, `internal/chaos`, `internal/wire`,
+`internal/arch`, both views and every document — and neither of the two programs
+that assemble any of it. Since the first commit. A fresh clone could not run the
+first command in its own README.
+
+**Why:** `.gitignore` line 2 and 3, written before there was anything to ignore:
+
+```
+# Build output
+open-outcry
+swarm
+```
+
+The intent was the two compiled binaries that land in the working directory
+after `go build`. But **a gitignore pattern containing no slash matches at every
+level of the tree, and matches directories exactly as readily as files.** So
+`open-outcry` matched `cmd/open-outcry/` and `swarm` matched `cmd/swarm/`, and
+git excluded both packages wholesale.
+
+The fix is one character in each line:
+
+```
+/open-outcry
+/swarm
+```
+
+A leading slash anchors the pattern to the repository root, which is where the
+binaries actually are.
+
+**Worth saying out loud: yes, and it is the sharpest entry in this log, because
+of what did NOT fire.**
+
+Every guard this project has was green throughout:
+
+- `go build ./...` — passed. It compiles the **working tree**, and the files are
+  present there.
+- `go test ./...` — 11 packages green, including `cmd/open-outcry` and
+  `cmd/swarm`. Same reason.
+- `internal/arch` — the architecture test that exists specifically to notice
+  structural drift. It enumerates packages with `go list ./...`, which also
+  reads the working tree.
+- `gofmt`, `go vet` — same.
+- `git status` — **clean**. This is the one that matters. Status reports files
+  that are untracked *and visible*; an ignored file is neither. The ignore
+  mechanism's entire job is to keep quiet, and it did.
+- Pushing — succeeded, every time, reporting exactly the commits it had.
+
+Every one of those instruments answers a question about the working tree. The
+question nobody asked was *what is actually in the repository*, and there was no
+guard for it because the guards were all built by someone standing in the
+directory where the files exist.
+
+This is a sixth distinct instrument failure, and unlike entries 5, 10, 13, 14
+and 15 there was **no wrong reading to notice.** Entry 5 gave a false answer.
+Entry 10 gave a stale one. Entry 15 gave an unobservable one. Here every
+instrument gave a *correct* answer to the question it was asked. The defect was
+in the gap between the question they answered and the question that mattered,
+and a gap emits nothing. It was found by an unrelated glance at `git status`
+output during an unrelated commit.
+
+**Fixed by:** anchoring both patterns, adding `cmd/` (7 files), and adding the
+only check that could ever have caught this — one that reads the repository
+rather than the directory:
+
+```
+git clone https://github.com/ziaulalam1/open-outcry.git
+cd open-outcry && go build ./... && go test ./...
+```
+
+Verified from a genuine fresh clone: `cmd/open-outcry` and `cmd/swarm` present,
+build clean, 11 packages green, `go run ./cmd/open-outcry -port 8099` serving,
+chaos arming, and a 20s swarm run reporting 0 errors, 0 abnormal closures and
+backpressure 1386.
+
+**The generalisation:** a local pass proves the working tree works. It proves
+nothing whatsoever about the artifact you published, and the two drift silently
+because the mechanism that separates them is designed to be silent. If what you
+ship is a repository, then the test has to start with `git clone`.
+
+Note also what this does to the history. The commit messages describe adding
+the swarm and the transport layer; those commits contain the tests, the wire
+format and the views, and not the programs. The record of the build order is
+accurate about when the work happened and incomplete about what landed. That is
+left as it is — rewriting it would be a second, larger falsehood, and this entry
+is the correction.

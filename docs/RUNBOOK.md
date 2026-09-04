@@ -35,6 +35,28 @@ ok  github.com/ziaulalam1/open-outcry/internal/wire       0.004s
 
 `gofmt -l .` prints nothing. `go vet ./...` exits 0.
 
+### The clone gate — run this before any talk, and after any `.gitignore` edit
+
+Everything above compiles and tests the **working tree**. None of it can tell
+you what is actually in the repository. On 2026-09-04 that gap turned out to be
+hiding the fact that `.gitignore` had excluded both `cmd/` packages since the
+first commit, so the published repo had no main package while every local check
+stayed green (`docs/build-log.md` entry 16).
+
+```
+git clone https://github.com/ziaulalam1/open-outcry.git /tmp/oo-clonetest
+cd /tmp/oo-clonetest
+ls cmd/open-outcry cmd/swarm      # both must exist
+go build ./... && go test ./...   # must be clean, 11 packages
+go run ./cmd/open-outcry -port 8099
+```
+
+Verified from a real clone on 2026-09-04: both packages present, build clean,
+11 packages green, server serving, and a 20s swarm run at `-rate 30` reporting
+0 errors, 0 abnormal closures, backpressure 1386.
+
+**If what you ship is a repository, the test starts with `git clone`.**
+
 ---
 
 ## 1. The server
