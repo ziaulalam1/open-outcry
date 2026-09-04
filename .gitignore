@@ -1,6 +1,12 @@
-# Build output
-open-outcry
-swarm
+# Build output.
+#
+# LEADING SLASH IS LOAD-BEARING. A gitignore pattern with no slash in it matches
+# at EVERY depth, and matches directories as readily as files — so bare
+# `open-outcry` and `swarm` silently excluded cmd/open-outcry/ and cmd/swarm/,
+# and this repository shipped with no main package in it at all. Anchored to the
+# root, these match only the built binaries. See docs/build-log.md entry 16.
+/open-outcry
+/swarm
 *.test
 
 # Workshop material — written for whoever is running the event, not for a
