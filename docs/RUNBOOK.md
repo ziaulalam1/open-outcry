@@ -240,20 +240,50 @@ is assigned structurally in `assignProfiles()`:
   blackhole always gets one even at small `-n`.
 
 So `-blackhole` is the only lever on the mix. The ratio of rester to crosser to
-canceller is fixed in code. Verified at `-n 24 -blackhole 1`:
+canceller is fixed in code. Verified at `-n 24 -rate 30 -dur 120s -blackhole 1`,
+chaos armed:
 
 ```
-profile      clients     sent     read   errors
-rester            10    13498   336631        0
-crosser            9    12149   305777        0
-canceller          4     5400   131436        0
-blackhole          1      256        0        1
-total             24    31303   773844        1
+ran 2m0.005s
+profile      clients      sent       read  errors  closed
+rester            10     36000     894235       0       0
+crosser            9     32398     811859       0       0
+canceller          4     14399     348907       0       0
+blackhole          1       257          0       0       1
+total             24     83054    2055001       0       1
+
+1 blackhole disconnect(s): the server timed them out because they never
+pong (pongWait). That is the design working, not an error.
+
+server counters, read off the stats feed over this run:
+  backpressure                   1407   (projector: "dropped · slow phone")
+  chaos dropped                 82679   (projector: "dropped · chaos")
+  engine seq                    83001   481 stats samples
+  split                          true   chaos armed, delay 1200ms
+
+the blackholed client's send buffers DID overflow: 1407 frames dropped and
+counted. This is the number act two points at.
 ```
 
-The blackhole reading **0 frames** is the load-bearing line — the binary checks
-this itself and prints a WARNING if a blackholed client read anything, because
-a blackhole that reads is not exercising the drop counter at all.
+### Reading that summary
+
+- **`errors` is malfunction. `closed` is the server hanging up.** They are
+  separate columns because they mean opposite things. **A clean run reports
+  zero in `errors`.** If it does not, something is actually wrong.
+- **One `closed` on the blackhole is expected on every run.** It never reads,
+  so it never pongs, so the server's `pongWait` (25s) expires and the server
+  disconnects it. That is the design working. Prior to 2026-09-04 this printed
+  as an error and made every correct run look like a failed one.
+- **The blackhole reading 0 frames** is the load-bearing line. The binary
+  prints a WARNING if a blackholed client read anything, because a blackhole
+  that reads is not exercising the drop counter at all.
+- **The `server counters` block is measured, not inferred.** `cmd/swarm` holds
+  one extra connection on the stats feed for the run, takes a baseline before
+  the load starts, and reports deltas. If that connection fails it prints
+  **`NOT OBSERVED`** rather than `0` — a zero meaning "not measured" and a zero
+  meaning "nothing was dropped" are opposite findings that look identical.
+- The observer connection means the server's own client count is `-n` **plus
+  one**. The summary prints the server's figure rather than assuming.
 
 The room grid on the projector populates from these clients: `-n 24` produced
 exactly **24 grid cells**, confirmed by DOM inspection.
@@ -294,6 +324,24 @@ Raise the rate. That is the whole answer.
 ```
 go run ./cmd/swarm -n 24 -rate 30 -dur 45s -blackhole 1
 ```
+
+**You no longer have to read the projector to check.** Since 2026-09-04 the
+swarm subscribes to the stats feed itself and prints the measured counter at the
+end of every run, as a delta over that run:
+
+```
+server counters, read off the stats feed over this run:
+  backpressure                   1407   (projector: "dropped · slow phone")
+  chaos dropped                 82679   (projector: "dropped · chaos")
+```
+
+and then says, in words, whether the blackhole's buffers overflowed or whether
+the counter sat at zero and why. If backpressure is 0 it prints the loopback
+explanation and tells you to raise `-rate`, rather than leaving you to wonder.
+
+Before that change the summary asserted the buffers "should have overflowed and
+been counted" without subscribing to anything that could tell it. See
+`docs/build-log.md` entry 15.
 
 The swarm binary prints this warning itself whenever you point it at localhost
 with `-rate` under 20 and at least one blackhole:

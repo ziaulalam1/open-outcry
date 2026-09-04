@@ -6,7 +6,7 @@ something actually failed — a log of successes would teach nothing.
 Format: what broke · why it broke · what it changed · whether it is worth saying
 out loud.
 
-Four entries share a theme: **verification tooling needs verifying.** Four
+Five entries share a theme: **verification tooling needs verifying.** Five
 distinct ways a measuring instrument lies, all found by accident in one build:
 
 - **Entry 5 — the instrument was WRONG.** Five raster scales, three payloads,
@@ -21,9 +21,14 @@ distinct ways a measuring instrument lies, all found by accident in one build:
   cuts against the project's own fixture-first build order, which I would still
   choose.
 - **Entry 14 — I built the broken instrument myself**, which makes it the
-  strongest of the four: a cumulative counter read across successive trials,
+  strongest of the five: a cumulative counter read across successive trials,
   producing a dose-response curve out of nothing. It is the natural answer to
   *"how would you know?"*
+- **Entry 15 — the instrument reported a number it could not see.** The load
+  client's summary stated that a counter in another process "should have
+  overflowed and been counted", phrased as a result, with no subscription to
+  the feed carrying it. Not wrong, not dead, not generous, not confounded —
+  outside its own observability, and worded like a measurement anyway.
 
 A green check mark is a claim made by an entire pipeline — the assertion, the
 instrument, and the reporting layer between them — and in this build each of
@@ -573,3 +578,167 @@ The generalisation, and the one I would give the room: **a measurement where the
 number can only go up is not a measurement.** Ask what the control looks like
 before you run the treatment. If you cannot describe a result that would make you
 abandon the change, you are not testing it.
+
+---
+
+## 15. The load client slammed TCP shut, then reported the damage as its own errors
+
+*2026-09-04*
+
+**Broke:** First run of `cmd/swarm` on the laptop rather than in a container, and
+the first at full duration with somebody reading the output carefully. Three
+things were wrong at once and each disguised the others.
+
+`-dur 120s` reported `ran 1m34.861s`. Every client recorded exactly one error —
+10 / 9 / 4 / 1, matching the profile counts exactly, which is the shape of a
+single common cause rather than 24 independent failures. And the server logged
+**24 × `close 1006 (abnormal closure): unexpected EOF`** at one timestamp.
+
+### The run, recorded with its qualifiers attached
+
+First numbers produced by this binary on real hardware rather than inside a
+container. Written down here *with* the caveats rather than as a headline that
+someone later has to reconstruct the conditions for.
+
+**Invocation:**
+
+```
+go run ./cmd/open-outcry -port 8080
+curl -s "http://localhost:8080/chaos?armed=1&delay=1200&drop=3"
+go run ./cmd/swarm -n 24 -rate 30 -dur 120s -blackhole 1
+```
+
+| | |
+|---|---|
+| orders sent | ~62,000 |
+| frames read | 1,528,154 |
+| clients | 24 (23 reading, 1 blackholed) |
+| wall clock | ~95s of a requested 120s — **short, see above** |
+| machine | macOS laptop, outside the container. **Exact model, chip and Go version not recorded at run time — TO FILL** |
+
+**What these numbers are NOT.** This is the qualifier, and it belongs at the
+point of recording because it is the whole difference between a measurement and
+a marketing figure:
+
+- **Synthetic clients over loopback. Not phones over wifi.** Every one of the
+  24 was a Go goroutine on the same machine as the server, reaching it through
+  the loopback interface. No radio, no access point, no contention for airtime,
+  no phone CPU decoding JSON, no browser render loop.
+- Loopback is *strictly kinder* than a venue. The kernel auto-tunes loopback
+  socket buffers into the megabytes, which is the entire reason the drop
+  counter behaves differently here than it will in a room (entry 14, and
+  `docs/RUNBOOK.md` §5).
+- So this figure is **not** a claim about how many people the demo supports in
+  a venue, and it must never be quoted as one. It is a throughput floor for the
+  server process under ideal transport, and an upper bound on what a real room
+  would produce.
+- The run was also **degraded on purpose** — chaos armed at `delay=1200
+  drop=3` — so the frames-read figure is what got through with a third of one
+  feed being dropped deliberately.
+
+The one number here that generalises is the ratio of work the engine did to
+work it was asked to do, because that part does not touch the network. Anything
+involving frames, reads or drops is a statement about loopback.
+
+**Why:** the shutdown path was not a shutdown. It was:
+
+```go
+_ = conn.WriteControl(websocket.CloseMessage, ...)
+_ = conn.Close()
+```
+
+which is a race, not a handshake. `Close()` tears down TCP. When it wins — and
+under load, with full socket buffers, it often does — the peer's read pump
+reaches EOF having never seen the close frame, and correctly reports **1006
+abnormal closure for a shutdown that was completely orderly.**
+
+The WebSocket closing handshake is two frames, not one. Send yours, *wait for
+theirs*, then drop the transport.
+
+The second defect made the first one hard to see. A write failing because the
+peer has hung up was counted in the `errors` column, so a run that shut down
+badly reported itself as a run that had malfunctioned — and the blackhole
+profile hit this on **every single run**, by design: it never reads, so it never
+pongs, so the server's `pongWait` deadline expires and the server disconnects
+it. That is the design working. It had been printing as an error since the
+profile was written, which is the fastest possible way to teach yourself to stop
+reading the errors column.
+
+**Fixed by:**
+
+- `shutdownConn()` — send the close frame, wait for the peer's (bounded at
+  `closeGrace`, 2s, matching the server's own `writeWait`), then close. The
+  blackhole has no reader goroutine by construction, so it drains inline
+  *after* the measured run has ended, which leaves its never-reads property
+  intact.
+- Splitting `closed` out of `errors`. `closed` means the server hung up on us;
+  `errors` means this tool malfunctioned. A clean run now reports **zero
+  errors**, and the one expected blackhole disconnect is printed with the
+  reason attached rather than left to be interpreted at 2am.
+
+**Verified**, one fresh server per run, `-n 24 -rate 30 -dur 120s -blackhole 1`,
+chaos armed:
+
+| | before | after |
+|---|---|---|
+| duration | ran short | `2m0.005s`, full |
+| errors | 1 per client | **0** |
+| `ws read ... 1006` lines in server log | 24 | **0** |
+
+---
+
+### The part worth saying out loud: the summary was asserting a number it could not see
+
+The old report ended with this, on every run:
+
+> blackholed clients read 0 frames, as intended — the server's send buffers for
+> those connections **should have overflowed and been counted.**
+
+It had no way to check. `cmd/swarm` never subscribed to the stats topic, so the
+drop counter it was describing was a number living in another process that this
+program could not observe. The sentence is phrased as a result and is in fact a
+hope. Asked point blank "did they overflow — what was the counter?", the honest
+answer was that the tool had never known.
+
+That is a **fifth** way an instrument lies, and it is distinct from the four
+already in this log: not wrong (5), not dead (10), not more generous than
+production (13), not confounded (14) — but *reporting a quantity outside its own
+observability* and phrasing it like a measurement.
+
+**Fixed by** giving it eyes. `cmd/swarm/observe.go` holds one extra connection
+on the stats feed for the life of the run, takes a baseline sample before the
+load starts, and reports deltas:
+
+```
+server counters, read off the stats feed over this run:
+  backpressure                   1407   (projector: "dropped · slow phone")
+  chaos dropped                 82679   (projector: "dropped · chaos")
+  engine seq                    83001   481 stats samples
+  split                          true   chaos armed, delay 1200ms
+
+the blackholed client's send buffers DID overflow: 1407 frames dropped and
+counted. This is the number act two points at.
+```
+
+Deltas rather than totals, specifically because of entry 14 — a cumulative
+counter read across trials is how that entry's fake dose-response curve got
+made. And when the observer cannot connect it prints **NOT OBSERVED** rather
+than `0`, because a zero meaning "not measured" and a zero meaning "nothing was
+dropped" are opposite findings that look identical.
+
+### And then the fix reintroduced the bug it was fixing
+
+First confirmation run after the close-handshake fix: 0 errors, full duration,
+and **one** remaining `1006` in the server log — for `swarm-observer`, the
+connection added by this change. `main` returned as soon as the summary printed,
+the process exited, and the OS tore the socket down while the observer's closing
+handshake was still in flight.
+
+The same defect, in the code written to remove the defect, inside an hour.
+Caught only because the acceptance criterion was "no 1006s **in the server
+log**" rather than "the client reports success" — the client reported a clean
+run both times. Fixed with a `done` channel that `Stop()` waits on.
+
+**Generalisation:** the party that fails to observe an orderly shutdown is the
+*peer*, so a clean shutdown cannot be confirmed from the side doing the shutting
+down. Check the other end's log, or you are grading your own work.
