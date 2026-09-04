@@ -137,10 +137,12 @@ to the room: *these people are about to trade on prices that no longer exist.
 Do you show them stale data, or nothing?*
 
 **Act three — the trade-off, and what I got wrong.** Three ways a measuring
-instrument lied during this build, all found by accident: a decoder with a bad
-lookup table, an architecture test that printed PASS while dead, and a fixture
-more generous than production could ever be. Entries 5, 10 and 13 of
-[docs/build-log.md](docs/build-log.md).
+instrument lied during this build: a decoder with a bad lookup table, an
+architecture test that printed PASS while dead, and a full set of build, test
+and status checks that were all accurate and all pointed at the working tree
+rather than at the published repository. Entries 5, 10 and 16 of
+[docs/build-log.md](docs/build-log.md) — where there are six, not three, every
+one found by accident.
 
 Rehearsing alone, with no audience, is `cmd/swarm` — see the runbook.
 
