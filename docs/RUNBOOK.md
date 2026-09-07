@@ -390,10 +390,12 @@ Note the two counters are different things and only one of them is affected:
 
 ---
 
-## 6. THE SEQUENCE — most photogenic screen, solo, from cold
+## 6. THE SEQUENCE — every subsystem visibly working at once, solo, from cold
 
-Copy-paste, in this order. Three terminals. Measured end to end today; the
-screenshot it produces is the one in §7.
+Copy-paste, in this order. Three terminals. Measured end to end today. This is
+the state to reach when you want to see the whole system exercised
+simultaneously — engine, hub, chaos layer, invariant checker and load client all
+visibly doing their jobs on one screen. It is also what §7 describes.
 
 ```bash
 # ── terminal 1 — the server
@@ -419,13 +421,12 @@ http://localhost:8080/?view=projector&hero=1
 
 Then, at the keyboard:
 
-1. **Wait 20–30 seconds.** Watch the `behind by` figure climb. Divergence is
-   what makes the two panes photograph differently; at t=0 they are identical
-   and the picture says nothing.
-2. **Press `Space`** to freeze. The screen holds. Nothing on it will change
-   while you compose the shot, walk to the side of the screen, or take a burst.
-3. Shoot.
-4. **Press `Space` again** to unfreeze — the book jumps forward, which is the
+1. **Wait 20–30 seconds.** Watch the `behind by` figure climb. At t=0 the two
+   panes are identical and there is nothing to see; the divergence is the point.
+2. **Press `Space`** to freeze. The screen holds indefinitely while the engine
+   keeps matching underneath, so you can read it, point at it, or capture it
+   without anything moving.
+3. **Press `Space` again** to unfreeze — the book jumps forward, which is the
    live proof that freeze was a rendering pause and not a stopped system.
 
 `-dur 120s` gives you two minutes of populated grid to work in. Raise it if you
@@ -440,9 +441,9 @@ Why each element is in the sequence:
 | `swarm -n 24` | Populates the room grid with 24 cells. Without it the grid is empty and the screen looks like a mockup. |
 | `-rate 30` | Makes `dropped · slow phone` non-zero on localhost (1,387 measured). At the default 0.7 it reads 0 and the frame has a zero in it. |
 | `-blackhole 1` | The non-reading client that generates the backpressure in the first place. |
-| `hero=1` | +30% type, so the numbers are legible in a photo taken from the back of a room. |
+| `hero=1` | +30% type, so the numbers are legible from the back of a room. |
 | Wait 20–30s | Lets the panes visibly diverge. |
-| `Space` | Freezes rendering so a burst of frames are all identical and all sharp. |
+| `Space` | Freezes rendering so the screen can be read without it moving. |
 
 ---
 
@@ -462,8 +463,8 @@ Captured today at 1920×1080, hero on, chaos armed, swarm at rate 30:
 - Room grid across the bottom, 24 cells
 
 The invariants staying green while the delivery counters climb is the entire
-argument of act two, and it is on screen simultaneously with the damage. That
-is the frame worth photographing.
+argument of act two, and it is on screen simultaneously with the damage. If you
+only ever look at this system once, look at it in this state.
 
 ---
 
@@ -510,8 +511,122 @@ Stated so nobody mistakes silence for confirmation.
   distance and projector brightness is a rehearsal item. See
   `docs/jsqr-v23-alignment.md` for why QR decoding is not assumed to be a
   solved problem here.
-- **Projector colour and contrast.** The near-black background is a design
-  choice for photography; how it survives a specific venue's projector is
-  unmeasured.
+- **Projector colour and contrast.** The near-black background is a deliberate
+  design choice; how it survives a specific venue's projector is unmeasured.
 - **`-mid` and `-seed`** on the swarm were not varied. They are listed because
   `-h` lists them, not because their effect was exercised.
+
+---
+
+## 10. The venue — where this demo actually fails
+
+Everything above §9 was verified by running it. **Almost nothing in this section
+can be**, because it needs a room, a projector and thirty phones. It is here
+because the failures it describes are the ones that end the demo, and every one
+of them is cheaper to test a week early than to discover on stage.
+
+Treat §10 as a pre-flight checklist, not as verified fact.
+
+### 10.1 AP CLIENT ISOLATION — the one that kills everything
+
+**This is the single point of failure for the entire workshop, and it has
+nothing to do with the code.**
+
+Most guest, campus and conference wifi runs **client isolation** (also called AP
+isolation or station isolation): devices can reach the internet but **cannot
+reach each other**. If the venue network isolates clients, every phone in the
+room can load Google and **not one of them can reach the laptop.** The QR code
+scans, the browser spins, nothing connects, and there is no fix available in the
+room.
+
+**Test it in advance. One phone, one laptop, on the actual venue network, in the
+actual room:**
+
+```
+# laptop, on venue wifi
+go run ./cmd/open-outcry -port 8080
+#   note the LAN URL it prints, e.g. http://10.x.x.x:8080
+```
+
+Then on a phone, on the same wifi, open that URL. If the trader view loads, you
+are fine. If it hangs, you have client isolation.
+
+Faster check from a second laptop on the same network:
+
+```
+curl -m 5 http://<the LAN IP it printed>:8080/healthz     # expect: ok
+```
+
+**If it is isolated, in preference order:**
+
+1. **Ask for the staff/faculty SSID.** Isolation is usually a guest-network
+   policy. This is the cheapest fix and it is a conversation, not a config.
+2. **Bring your own access point.** A travel router or a spare phone as a
+   hotspot with the laptop and the room's phones all joined to it. Note the
+   laptop must be ON the hotspot, not serving it, unless the laptop's own
+   hotspot allows client-to-client — test it.
+3. **Laptop as hotspot.** Works on macOS Internet Sharing, but it caps at a
+   small number of clients and the cap is not documented. **Test with more
+   phones than you expect.**
+4. **Fall back to `?fixture=1`** and run the whole thing off the recorded tape
+   (§8). The talk still works. The room just does not trade.
+
+**Decide which of these you are doing before the day, not in the room.**
+
+### 10.2 Phone count — what the book needs to look alive
+
+Not measured with real phones. From the swarm, which is a strictly kinder
+approximation:
+
+- Below roughly **8–10 active traders** the ladder is thin and the price-time
+  priority demonstration in act 1.2 is hard to stage, because you need two
+  people at the same price.
+- `cmd/swarm` can supplement a thin room — it connects over the same LAN and is
+  indistinguishable from phones, which is exactly what makes it a rehearsal
+  tool. It is a load generator, not an audience.
+
+### 10.3 The laptop is a stage prop — configure it as one
+
+None of this is in the code and all of it has ruined a demo somewhere:
+
+- **Disable sleep and screen saver.** On macOS run the server under
+  `caffeinate -di go run ./cmd/open-outcry -port 8080`, which keeps the display
+  and system awake for as long as it runs.
+- **Do Not Disturb / Focus on.** A notification banner across the projector
+  during act two is on screen for the whole room.
+- **Mains power.** Two hours of a Go server, a browser, and wifi is real battery.
+- **Close everything else**, especially anything that pops a dialog.
+- **Know the projector's resolution before you fit the type.** The projector
+  auto-fit is real (build-log entries 1 and 2) and bounded between 7 and 3
+  levels, but hero mode was designed against 1920×1080. On a 1024×768 or a 16:10
+  projector, **check the ladder is not clipped before the room is in it.**
+
+### 10.4 Recovery, mid-talk
+
+The one that matters: **the server going down does not lose the audience.**
+Sessions live in the phone's `sessionStorage` and the client reconnects with
+backoff, so restarting the binary brings the room back without anyone rescanning.
+
+- **Server died.** Restart it. Phones reconnect on their own within a few
+  seconds. The book restarts from the seed, which is not empty by design.
+- **The projector page is wedged.** Reload it. It is stateless — it rebuilds from
+  the retained frame per topic, so a late joiner gets a book immediately rather
+  than a blank ladder.
+- **You cannot get the split.** Confirm chaos is actually armed:
+  `curl -s http://localhost:8080/chaos` reads back state without changing it.
+  Split is exactly "chaos armed" (§3), so if it says `armed:true` and you see
+  one pane, the problem is the projector page, not the server.
+- **Total loss.** `?fixture=1` (§8). It opens no socket and needs no room.
+
+### 10.5 Pre-flight, in order, a week out and again on the day
+
+```
+1. Clone gate (§0)                  — does the published repo still build
+2. AP client isolation test (10.1)  — THE blocker; phone must reach the laptop
+3. Projector resolution + hero mode — is the ladder clipped
+4. QR scan from the back of the room — at real distance, real brightness
+5. caffeinate + Focus + mains power
+6. Swarm rehearsal (§6)             — full sequence, end to end
+```
+
+Items 2 and 4 are the ones that cannot be done from a desk. Everything else can.
