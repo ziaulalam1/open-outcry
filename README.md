@@ -14,8 +14,8 @@ go run ./cmd/open-outcry -port 8080
 
 Then open `http://localhost:8080/?view=projector`.
 
-For anything operational — flags, URLs, how to reach the split, how to get the
-screen into its most photogenic state — see **[docs/RUNBOOK.md](docs/RUNBOOK.md)**.
+For anything operational — flags, URLs, how to reach the split, how to get every
+subsystem visibly working at once — see **[docs/RUNBOOK.md](docs/RUNBOOK.md)**.
 Every command in it was verified by execution.
 
 ---
@@ -24,13 +24,21 @@ Every command in it was verified by execution.
 
 | | |
 |---|---|
-| 6,323 lines of Go | 79 test and fuzz functions, 11 packages |
+| 6,649 lines of Go | 93 test and fuzz functions, 11 packages |
 | Matching engine | price-time priority, deterministic, clockless |
 | Invariant checker | separate package, imports nothing from this module |
 | Chaos layer | injected delay and frame drops, runtime-controlled over HTTP |
 | WebSocket hub | fan-out with per-topic retention for gapless late joins |
 | Load client | `cmd/swarm`, N real sockets, indistinguishable from N phones |
 | Two views | projector and trader, served from the same binary via `go:embed` |
+
+Both counts are reproducible rather than asserted, because this repository has a
+build-log entry about numbers that drifted from the thing they described:
+
+```
+find . -name '*.go' | xargs wc -l | tail -1                     # 6649
+grep -rn '^func Test\|^func Fuzz' --include=*_test.go . | wc -l  # 93
+```
 
 ---
 
@@ -66,13 +74,31 @@ only place the wiring exists.
 Commands arrive as values on a channel; results leave as bytes. No other
 goroutine can reach book state.
 
-**There are no locks anywhere in this repository.** That is not a stunt. "No
-data races" is a claim about *ownership* here, not about correct locking — and
+**There is no lock anywhere on the path that owns book state** — not in
+`internal/engine` and not in `internal/loop`. That is not a stunt. "No data
+races" is a claim about *ownership* here, not about correct locking — and
 ownership is checkable by reading one file, whereas correct locking is checkable
 only by reasoning about every file at once. A mutex-guarded book would have been
 fewer lines and would have made every future change a question about lock
 discipline. The single-owner loop makes the same guarantee structurally, and the
 guarantee survives someone who has not read the code.
+
+**Mutexes do exist elsewhere in the tree, and the distinction is the point:**
+
+```
+$ grep -rn 'sync\.\(RW\)\?Mutex' --include=*.go . | grep -v _test.go
+internal/chaos/chaos.go:59      guards the chaos config snapshot
+cmd/open-outcry/main.go:230     guards the session-id counter
+cmd/swarm/client.go:255,336     the load client's own bookkeeping
+cmd/swarm/observe.go:77         the observer's counter snapshot
+```
+
+None of them is on the command path, none of them guards domain state, and
+every one guards a few fields that a goroutine hands to another goroutine.
+Earlier revisions of this file said "no locks anywhere in this repository,"
+which was false, and false in the specific way this project keeps writing
+build-log entries about: a description that had drifted from its artifact. The
+claim that was worth making is the scoped one, and it survives a `grep`.
 
 It also buys the thing act three needs: the engine is **deterministic and
 clockless**, so the command log fully determines the book state. Replay is a
@@ -176,7 +202,7 @@ correctness oracle.
   invisible to it by design. That is why the invariant row stays green while
   the drop counters climb, which is the point — but it means the checker is
   silent on the entire class of failure the workshop is about.
-- **Fuzzing is shallow.** 79 test and fuzz functions is decent coverage of the
+- **Fuzzing is shallow.** 93 test and fuzz functions is decent coverage of the
   cases considered; it is not a proof, and the fuzz corpus is small.
 
 ### Conflation is the production answer, and it is deliberately not shipped
@@ -272,8 +298,8 @@ docs/               runbook, build log, slides, shot list, writeups
 | [docs/RUNBOOK.md](docs/RUNBOOK.md) | Every operational command, verified by execution |
 | [docs/build-log.md](docs/build-log.md) | Dated entries, including the three instrument failures |
 | [docs/jsqr-v23-alignment.md](docs/jsqr-v23-alignment.md) | A decoder bug derivation, self-contained |
-| [docs/cfp-abstract.md](docs/cfp-abstract.md) | Submission draft |
-| [docs/post-mortem.md](docs/post-mortem.md) | Written after the talk |
+| [docs/cfp-abstract.md](docs/cfp-abstract.md) | Submission draft, unsubmitted |
+| [docs/post-mortem.md](docs/post-mortem.md) | Structure only. The talk has not been delivered yet; this exists so it is not invented afterwards |
 
 The slide deck and the photographer's shot list are written for whoever is
 running the event rather than for a reader of this repository, and are kept out
