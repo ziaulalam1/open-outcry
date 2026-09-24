@@ -1,6 +1,8 @@
 # Post-mortem — STRUCTURE ONLY
 
-**Status: stub. Nothing here is filled in, because the talk has not happened.**
+**Status: the workshop was delivered in May 2026. The same-day capture this file
+was built for did not happen, so the sections below stay empty rather than being
+reconstructed from memory after the fact.**
 
 This file exists now so that it is not invented later. The highest-signal
 content it will hold — the questions that beat me — is only capturable in the
